@@ -32,5 +32,5 @@ set_target_properties(cuda_gemm PROPERTIES CUDA_ARCHITECTURES native)
 # 编译可执行文件
 add_executable(profile_cuda_gemm_fp32 src/profile_cuda_gemm_fp32.cu)
 target_include_directories(profile_cuda_gemm_fp32 PUBLIC ${CUDA_GEMM_INCLUDE_DIRS})
-target_link_libraries(profile_cuda_gemm_fp32 PRIVATE cuda_gemm) 
+target_link_libraries(profile_cuda_gemm_fp32 PRIVATE cuda_gemm CUDA::cublas) 
 set_target_properties(profile_cuda_gemm_fp32 PROPERTIES CUDA_ARCHITECTURES native)

@@ -10,6 +10,7 @@
 #include "cuda_gemm.hpp"
 #include "cuda_gemm_utils.hpp"
 #include <cuda_runtime.h>
+#include <cublas_v2.h>
 
 template <typename T>
 float measure_performance(std::function<T(cudaStream_t)> bound_function,
@@ -43,6 +44,44 @@ float measure_performance(std::function<T(cudaStream_t)> bound_function,
     float const latency{time / num_repeats};
 
     return latency;
+}
+
+#define CHECK_CUBALS_ERROR(val) check_cublas((val), #val, __FILE__, __LINE__)
+void check_cublas(cublasStatus_t err, const char* const func, const char* const file, const int line) {
+    if (err != CUBLAS_STATUS_SUCCESS) {
+        std::cerr << "cuBLAS Error at: " << file << ": " << line << "\n";
+        std::cerr <<cublasGetStatusString(err) << "\n";
+        std::exit(EXIT_FAILURE);
+    }
+}
+
+// Determine CUDA data type from type
+template <typename T,
+            typename std::enable_if<std::is_same<T, float>::value ||
+                                        std::is_same<T, double>::value,
+                                        bool>::type = true>
+constexpr cudaDataType_t cuda_data_type_trait() {
+    if (std::is_same<T, float>::value) return CUDA_R_32F;
+    else if (std::is_same<T, double>::value) return CUDA_R_64F;
+    else {
+        throw std::runtime_error("Unsupported data type.");
+    }
+}
+
+template <typename T,
+            typename std::enable_if<std::is_same<T, float>::value ||
+                                        std::is_same<T, double>::value,
+                                        bool>::type = true>
+void launch_gemm_cublas(const Matrix<T> A, const Matrix<T> B, Matrix<T> C, cublasHandle_t handle) {
+    constexpr cublasGemmAlgo_t algo{CUBLAS_GEMM_DEFAULT};
+    constexpr cudaDataType_t data_type{cuda_data_type_trait<T>()};
+    T const alpha{static_cast<T>(1.0)};
+    T const beta{static_cast<T>(0.0)};
+
+    CHECK_CUBALS_ERROR(cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, B.width, A.height, A.width, &alpha, 
+                            B.elements, data_type, B.width, 
+                            A.elements, data_type, A.width, &beta, 
+                            C.elements, data_type, C.width, data_type, algo));
 }
 
 template <typename T,
@@ -168,19 +207,19 @@ std::pair<float, float> profile_gemm(
     CHECK_CUDA_ERROR(cudaStreamCreate(&stream));
 
     // Allocate memory on host.
-    Matrix<T> A_host, B_host, C_host, C_host_from_device;
+    Matrix<T> A_host, B_host, C_host, C_host_from_device, C_host_ref;
 
     A_host.height = m; A_host.width = k;
     B_host.height = k; B_host.width = n;
-    C_host.height =  C_host_from_device.height = m; 
-    C_host.width = C_host_from_device.width = n;
+    C_host.height =  C_host_from_device.height = C_host_ref.height = m; 
+    C_host.width = C_host_from_device.width = C_host_ref.width = n;
     CHECK_CUDA_ERROR(cudaMallocHost(&A_host.elements, A_host.width * A_host.height * sizeof(T)));
     CHECK_CUDA_ERROR(cudaMallocHost(&B_host.elements, B_host.width * B_host.height  * sizeof(T)));
     CHECK_CUDA_ERROR(cudaMallocHost(&C_host.elements, C_host.width * C_host.height  * sizeof(T)));
     CHECK_CUDA_ERROR(cudaMallocHost(&C_host_from_device.elements, C_host_from_device.width * C_host_from_device.height * sizeof(T)));
+    CHECK_CUDA_ERROR(cudaMallocHost(&C_host_ref.elements, C_host_ref.width * C_host_ref.height * sizeof(T)));
 
     // Initialize matrix A and B.
-    printf("%d, %d\n", A_host.width, A_host.height);
     random_initialize_matrix(A_host);
     random_initialize_matrix(B_host);
     random_initialize_matrix(C_host);
@@ -204,20 +243,44 @@ std::pair<float, float> profile_gemm(
     CHECK_CUDA_ERROR(cudaMemcpy(C_device.elements, C_host.elements, 
                                 C_device.width * C_device.height * sizeof(T),
                                 cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(C_host_ref.elements, C_host.elements, 
+                                C_host_ref.width * C_host_ref.height * sizeof(T),
+                                cudaMemcpyHostToHost));
+    
+    // Create cuBlas handle.
+    cublasHandle_t handle;
+    CHECK_CUBALS_ERROR(cublasCreate(&handle));
+    CHECK_CUBALS_ERROR(cublasSetStream(handle, stream));
 
-    // Compute reference output using CPU.
-    std::cout << "Computing reference output using CPU..." << std::endl;
-    launch_gemm_cpu(A_host, B_host, C_host);
-    std::cout << "Done." << std::endl;
+    // Compute reference output using cuBLAS.
+    launch_gemm_cublas<T>(A_device, B_device, C_device, handle);
+    CHECK_CUDA_ERROR(cudaStreamSynchronize(stream));
+    CHECK_CUDA_ERROR(cudaMemcpy(C_host_ref.elements, C_device.elements,
+                                C_host_ref.width * C_host_ref.height * sizeof(T), cudaMemcpyDeviceToHost));
+
+    // // Compute reference output using CPU.
+    // std::cout << "Computing reference output using CPU..." << std::endl;
+    // launch_gemm_cpu(A_host, B_host, C_host);
+    // std::cout << "Done." << std::endl;
 
     // Launch CUDA GEMM.
+    CHECK_CUDA_ERROR(cudaMemcpy(C_device.elements, C_host.elements,
+                                C_device.width * C_device.height * sizeof(T), cudaMemcpyHostToDevice));
     // Verify the correctness of CUDA GEMM.
     gemm_kernel_launch_function(A_device, B_device, C_device, stream);
 
     CHECK_CUDA_ERROR(cudaStreamSynchronize(stream));
     CHECK_CUDA_ERROR(cudaMemcpy(C_host_from_device.elements, C_device.elements,
                                 C_host_from_device.width * C_host_from_device.height * sizeof(T), cudaMemcpyDeviceToHost));
-    assert(all_close<T>(C_host_from_device, C_host, abs_tol, rel_tol));
+    assert(all_close<T>(C_host_from_device, C_host_ref, abs_tol, rel_tol));
+
+    float const latency_cublas{measure_performance<void>(
+        [&](cudaStream_t stream)
+        {
+            launch_gemm_cublas<T>(A_device, B_device, C_device, handle);
+            return;
+        },
+        stream, num_repeats, num_warmups)};
 
     float const latency_cuda_gemm{measure_performance<void>(
         [&](cudaStream_t stream)
@@ -237,11 +300,14 @@ std::pair<float, float> profile_gemm(
     CHECK_CUDA_ERROR(cudaFreeHost(C_host_from_device.elements));
     CHECK_CUDA_ERROR(cudaStreamDestroy(stream));
 
-
+    std::cout << "cuBLAS GEMM Kernel Performance" << std::endl;
+    print_performance_result<T>(A_host, B_host, latency_cublas);
     std::cout << "Custom GEMM Kernel Performance" << std::endl;
     print_performance_result<T>(A_host, B_host, latency_cuda_gemm);
+    std::cout << "Custom GEMM VS cuBLAS GEMM Performance: "
+              << latency_cublas / latency_cuda_gemm * 100.0f << "%\n";
 
-    return std::pair<float, float>{0, latency_cuda_gemm};
+    return std::pair<float, float>{latency_cublas, latency_cuda_gemm};
 }
 
 #endif // PROFILE_UTILS_CUH

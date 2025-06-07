@@ -4,8 +4,8 @@
 #include <cuda_runtime.h>
 template <typename T>
 struct Matrix{
-    int width;
-    int height;
+    size_t width;
+    size_t height;
     int stride;
     float* elements;
 };
