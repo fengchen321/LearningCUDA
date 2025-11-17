@@ -34,3 +34,12 @@ add_executable(profile_cuda_gemm_fp32 src/profile_cuda_gemm_fp32.cu)
 target_include_directories(profile_cuda_gemm_fp32 PUBLIC ${CUDA_GEMM_INCLUDE_DIRS})
 target_link_libraries(profile_cuda_gemm_fp32 PRIVATE cuda_gemm CUDA::cublas) 
 set_target_properties(profile_cuda_gemm_fp32 PROPERTIES CUDA_ARCHITECTURES native)
+
+if (CMAKE_BUILD_TYPE STREQUAL "Debug") 
+    target_compile_options(cuda_gemm PRIVATE 
+        $<$<COMPILE_LANGUAGE:CUDA>:-G>
+    )
+    target_compile_options(profile_cuda_gemm_fp32 PRIVATE 
+        $<$<COMPILE_LANGUAGE:CUDA>:-G>
+    )
+endif()

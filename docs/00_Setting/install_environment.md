@@ -76,3 +76,25 @@ sudo apt-get -y install cudnn
 windows -> nivdia控制面板-> 桌面->启用开发者设置-> 开发者：管理GPU性能计数器：允许所有用户访问 GPU 性能计数器 （重启电脑）
 
 nsys 打开： `nsight-sys vect_add.nsys-rep`
+
+## 调试
+
+安装Nsight Visual Studio Code Edition 插件 ,配置launch.json,然后打断点，按F5即可调试,右下角CUDA:(0,0,0)(0,14,0)进行切换比如输入thread(5,0,0)
+```shell
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "CUDA C++: Launch",
+            "type": "cuda-gdb",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/GEMM/profile_cuda_gemm_fp32",
+        }, 
+        {
+            "name" : "CUDA C++: Attach",
+            "type" : "cuda-gdb",
+            "request" : "attach",
+        }
+    ]
+}
+```
