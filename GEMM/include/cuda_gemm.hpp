@@ -7,7 +7,7 @@ struct Matrix{
     size_t width;
     size_t height;
     int stride;
-    float* elements;
+    T* elements;
 };
 
 template <typename T>

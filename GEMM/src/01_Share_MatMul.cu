@@ -1,8 +1,9 @@
 #include <cuda_fp16.h>
+#include <iostream>
 #include "cuda_gemm.hpp"
 #include "cuda_gemm_utils.hpp"
 
-// GEMM kernel v01. Share Memoey
+// GEMM kernel v01. Shared Memory
 // Get a matrix element
 #define BLOCK_SIZE 16
 template <typename T>
@@ -93,6 +94,10 @@ template <typename T>
 void launch_gemm_kernel_v01(const Matrix<T> A, const Matrix<T> B, Matrix<T> C, cudaStream_t stream)
 {
     if (A.width != B.height || C.height != A.height || C.width != B.width) {
+        std::cerr << "Error: Matrix dimensions mismatch!" << std::endl;
+        std::cerr << "A: " << A.height << "x" << A.width << std::endl;
+        std::cerr << "B: " << B.height << "x" << B.width << std::endl;
+        std::cerr << "C: " << C.height << "x" << C.width << std::endl;
         return;
     }
     dim3 const block_dim{BLOCK_SIZE, BLOCK_SIZE, 1U};
