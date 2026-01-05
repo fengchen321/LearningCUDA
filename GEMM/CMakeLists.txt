@@ -37,9 +37,9 @@ set(GEMM_CUDA_WARNINGS
     -Xcompiler=${GEMM_COMMON_WARNINGS}
 )
 
-# Debug specific options
+# Debug specific options - only apply in Debug build
 set(GEMM_DEBUG_OPTIONS
-    $<$<COMPILE_LANGUAGE:CUDA>:-G>
+    $<$<AND:$<CONFIG:Debug>,$<COMPILE_LANGUAGE:CUDA>>:-G>
 )
 
 # https://cmake.org/cmake/help/latest/prop_tgt/CUDA_ARCHITECTURES.html
