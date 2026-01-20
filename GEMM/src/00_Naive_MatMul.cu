@@ -1,15 +1,16 @@
 #include <cuda_fp16.h>
+#include <iostream>
 
 #include "cuda_gemm.hpp"
 #include "cuda_gemm_utils.hpp"
 
-// GEMM kernel v00.  Naive Matrix multiplication kernel called by gemm_v00
+// GEMM kernel v00. Naive Matrix multiplication kernel called by gemm_v00
 
 template <typename T>
 __global__ void gemm_v00(const Matrix<T> A, const Matrix<T> B, Matrix<T> C)
 {
-    // Each thread computr one element of C
-    // by accmulating results into Cvalue
+    // Each thread computes one element of C
+    // by accumulating results into Cvalue
     T Cvalue = 0;
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
@@ -22,6 +23,14 @@ __global__ void gemm_v00(const Matrix<T> A, const Matrix<T> B, Matrix<T> C)
 template <typename T>
 void launch_gemm_kernel_v00(const Matrix<T> A, const Matrix<T> B, Matrix<T> C, cudaStream_t stream)
 {
+    if (A.width != B.height || C.height != A.height || C.width != B.width) {
+        std::cerr << "Error: Matrix dimensions mismatch!" << std::endl;
+        std::cerr << "A: " << A.height << "x" << A.width << std::endl;
+        std::cerr << "B: " << B.height << "x" << B.width << std::endl;
+        std::cerr << "C: " << C.height << "x" << C.width << std::endl;
+        return;
+    }
+
     dim3 const block_dim{16U, 16U, 1U};
     dim3 const grid_dim{
         (static_cast<unsigned int>(B.width) + block_dim.x - 1U) / block_dim.x,

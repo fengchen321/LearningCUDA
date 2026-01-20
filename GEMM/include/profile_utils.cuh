@@ -48,6 +48,7 @@ float measure_performance(std::function<T(cudaStream_t)> bound_function,
 
 #define CHECK_CUBALS_ERROR(val) check_cublas((val), #val, __FILE__, __LINE__)
 void check_cublas(cublasStatus_t err, const char* const func, const char* const file, const int line) {
+    (void)func;  // Suppress unused parameter warning
     if (err != CUBLAS_STATUS_SUCCESS) {
         std::cerr << "cuBLAS Error at: " << file << ": " << line << "\n";
         std::cerr <<cublasGetStatusString(err) << "\n";
@@ -139,8 +140,14 @@ void print_device_info() {
     float const memory_size{static_cast<float>(device_prop.totalGlobalMem) /
                             (1 << 30)};
     std::cout << "Memory Size: " << memory_size << " GB" << std::endl;
+#if defined(__CUDACC_VER_MAJOR__) && __CUDACC_VER_MAJOR__ >= 13
+    int memClockKhz = 0;
+    cudaDeviceGetAttribute(&memClockKhz, cudaDevAttrMemoryClockRate, device_id);
+#else
+    int memClockKhz = device_prop.memoryClockRate;
+#endif
     float const peak_bandwidth{
-        static_cast<float>(2.0f * device_prop.memoryClockRate *
+        static_cast<float>(2.0f * memClockKhz *
                            (device_prop.memoryBusWidth / 8) / 1.0e6)};
     std::cout << "Peak Bandwitdh: " << peak_bandwidth << " GB/s" << std::endl;
     std::cout << std::endl;
@@ -202,6 +209,7 @@ std::pair<float, float> profile_gemm(
     T abs_tol, double rel_tol, size_t num_repeats = 10, size_t num_warmups = 10,
     unsigned int seed = 0U)
 {
+    (void)seed;  // Suppress unused parameter warning
     // Create CUDA stream.
     cudaStream_t stream;
     CHECK_CUDA_ERROR(cudaStreamCreate(&stream));
@@ -277,6 +285,7 @@ std::pair<float, float> profile_gemm(
     float const latency_cublas{measure_performance<void>(
         [&](cudaStream_t stream)
         {
+            (void)stream;  // Suppress unused parameter warning
             launch_gemm_cublas<T>(A_device, B_device, C_device, handle);
             return;
         },
@@ -285,6 +294,7 @@ std::pair<float, float> profile_gemm(
     float const latency_cuda_gemm{measure_performance<void>(
         [&](cudaStream_t stream)
         {
+            (void)stream;  // Suppress unused parameter warning
             gemm_kernel_launch_function(A_device, B_device, C_device, stream);
             return;
         },
