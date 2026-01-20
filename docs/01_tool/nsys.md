@@ -8,7 +8,7 @@
 - **事件追踪**：记录CUDA内核启动、内存拷贝、同步操作等事件，便于分析程序执行流程。
 - **多进程支持**：支持同时分析多个进程的性能数据，适用于多线程或多进程应用。
 
-所有命令行选项都是区分大小写的。对于命令开关选项，当使用短选项时，参数应在开关后以空格分隔；例如， `-s process-tree` 。当使用长选项时，开关后应跟一个等号，然后是参数；例如， `--sample=process-tree` 。
+所有命令行选项都是区分大小写的。对于命令开关选项，当使用短选项时，参数应在开关后以空格分隔；例如， `-s process-tree` 。当使用长选项时，开关后应跟一个等号（不跟等号也行），然后是参数；例如， `--sample=process-tree` 。
 
 [相关指令信息](../data/nsys_help)
 
@@ -18,7 +18,7 @@
 
 | 参数 | 说明 |
 |------|------|
-| `-b, --backtrace` | 回溯方法：lbr, fp, dwarf, none，默认lbr |
+| `-b, --backtrace` | 回溯方法：lbr, fp （-fno-omit-frame-pointer）, dwarf（-g）, none，默认lbr |
 | `-c, --capture-range` | 捕获范围：none, cudaProfilerApi, nvtx, hotkey |
 | `--capture-range-end` | 捕获范围结束行为：none, stop, stop-shutdown, repeat[:N], repeat-shutdown:N |
 | `--command-file` | 包含nsys开关的命令文件 |
@@ -119,6 +119,11 @@ nsys profile  --sample=process-tree --backtrace=lbr \
 # 统一内存诊断：CPU+GPU页错误跟踪
 nsys profile --cuda-memory-usage=true --cuda-um-cpu-page-faults=true --cuda-um-gpu-page-faults=true -o nsys_profile_memory_cudaum ./GEMM/profile_cuda_gemm_fp32
 
+# 获取网卡指标
+nsys profile --nic-metrics=true -o nsys_profile_nic ./GEMM/profile_cuda_gemm_fp32
+
+# 获取InfiniBand 交换机性能指标 (root) sudo ibswitches -C <nic name>
+nsys profile --ib-switch-metrics-devices=<IB switch GUID> my_app
 # 多框架分析：Python+PyTorch+Dask
 
 # 精确捕获范围区域
@@ -148,7 +153,7 @@ nsys常用快捷按键：
 
 Analysis Summar 展示的是分析概要，包含指令配置，CPU，GPU， NIC网格信息,环境变量等信息。
 
-常用Timeline View：可视化所有事件的时间序列。右上角+-可放大缩小。
+常用Timeline View：可视化所有事件的时间序列。右上角+-可放大缩小。缩小后高度表示百分比利用率
 
 Events VIew： 以表格形式列出所有采集到的原始事件，支持排序。
 
@@ -176,6 +181,8 @@ Flat View：所有函数的去重列表，不显示调用关系
 点击1中 CUDA API，然后右键点击`Show in Events View`，可以看到API相关信息，也可以手动选择`Events View`打开：
 
 点击其中一项比如3位置的kernel，双击显示4中的箭头对应着API和设备kernel事件的联系。鼠标悬浮可以看到API的描述的trace信息。在5中Events VIew中信息一致,kernel 也同样可以看到附加的设备端信息。
+
+点击kernel鼠标右键可以查看ncu指令，运行相关指令去分析kernel，也可以右键copy ToolTip 拷贝trace信息。
 
 ==**后续launch-service间的option command里，和profile相同的子命令不在显示赘述。**==
 
@@ -285,8 +292,16 @@ nsys service
 nvtx_sum, osrt_sum, cuda_api_sum, cuda_gpu_kern_sum, cuda_gpu_mem_time_sum, cuda_gpu_mem_size_sum, openmp_sum, opengl_khr_range_sum, opengl_khr_gpu_range_sum, vulkan_marker_sum, vulkan_gpu_marker_sum, dx11_pix_sum, dx12_gpu_marker_sum, dx12_pix_sum, wddm_queue_sum, um_sum, um_total_sum, um_cpu_page_faults_sum, openacc_sum, syscall_sum
 
 ```shell
-nsys stats --report cuda_gpu_kern_sum ./report.nsys-rep
+# 导出一种报告
+nsys stats --force-export=true --report=cuda_gpu_kern_sum ./nsys_profile_status_true.nsys-rep
+# 导出多种报告，多种格式，三种report，对应format格式三种，现在提供两种格式输出，匹配方法重复最后一种格式用于对齐
+nsys stats --force-export=true --report=cuda_gpu_trace --report=cuda_gpu_kern_sum --report=cuda_api_sum --format=csv,column --output=.,- ./nsys_profile_status_true.nsys-rep
+# 过滤显示
+nsys stats --report cuda_api_sum --format table \
+--output @"grep -E (-|Name|cudaFree)" ./nsys_profile_status_true.sqlite
 ```
+
+![image-20260120195221811](./nsys.assets/nsys_stats_r_cuda_gpu_kern_sum.png)
 
 ## status
 
