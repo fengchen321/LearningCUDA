@@ -10,7 +10,7 @@
 
 所有命令行选项都是区分大小写的。对于命令开关选项，当使用短选项时，参数应在开关后以空格分隔；例如， `-s process-tree` 。当使用长选项时，开关后应跟一个等号（不跟等号也行），然后是参数；例如， `--sample=process-tree` 。
 
-[相关指令信息](../data/nsys_help)
+[相关指令信息](../data/nsys_help)  以下子命令不含有实验性和已废弃指令。
 
 ## profile
 
@@ -122,8 +122,8 @@ nsys profile --cuda-memory-usage=true --cuda-um-cpu-page-faults=true --cuda-um-g
 # 获取网卡指标
 nsys profile --nic-metrics=true -o nsys_profile_nic ./GEMM/profile_cuda_gemm_fp32
 
-# 获取InfiniBand 交换机性能指标 (root) sudo ibswitches -C <nic name>
-nsys profile --ib-switch-metrics-devices=<IB switch GUID> my_app
+# 获取InfiniBand 交换机性能指标 (root) sudo ibswitches -C <nic name>; sudo ibnetdiscover -S
+nsys profile --ib-switch-metrics-devices=<IB switch GUID> ./GEMM/profile_cuda_gemm_fp32
 # 多框架分析：Python+PyTorch+Dask
 
 # 精确捕获范围区域
@@ -247,9 +247,9 @@ nsys launch --session=%q{USER} ./GEMM/profile_cuda_gemm_fp32
 nsys stop --session=%q{USER} --keep=3
 
 # 使用 cudaProfilerStart/Stop 开始/停止收集 (单终端)
-# 等同于nsys profile --capture-range=cudaProfilerApi ./demo
+# 等同于nsys profile --capture-range=cudaProfilerApi ./profile_demo/activity_trace_async cudaprofilerapi
 nsys start -c cudaProfilerApi
-nsys launch -w true ./demo
+nsys launch -w true ./profile_demo/activity_trace_async cudaprofilerapi
 
 # 多次采集
 nsys launch <application> [application-arguments]
@@ -327,7 +327,6 @@ nsys status --environment
 |------|------|
 | `--append` | 追加到现有文件（用于目录输出格式） |
 | `-f, --force-overwrite` | 覆盖现有文件：true, false |
-| `-h, --help` | 打印帮助 |
 | `--include-blobs` | 导出NVTX扩展负载为二进制数据：true, false |
 | `--include-json` | 包含重复JSON块：true, false |
 | `-l, --lazy` | 延迟表创建：true, false |
@@ -337,12 +336,11 @@ nsys status --environment
 | `-t, --type` | 导出格式：sqlite, hdf, text, json, info, arrow, arrowdir, parquetdir |
 | `--tables` | 匹配模式的表（正则表达式） |
 | `--times` | 时间范围过滤 |
+| `--ts-normalize` | 将时间戳转换为 UTC 绝对时间（从 UNIX epoch 起算），用于多台机器的时间对齐 |
+| `--ts-shift` | 手动偏移时间戳，用于微调或"手动对齐"不同时间采集的报告 |
 
 ```shell
 nsys export --type=sqlite ./report.nsys-rep
-
-# 多节点时间线对齐
-nsys export --sync-timeline 
 ```
 
 ## analyze

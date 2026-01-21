@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.23)
+cmake_minimum_required(VERSION 3.20)
 
 project(GEMM
     VERSION 0.0.1
@@ -43,7 +43,9 @@ set(GEMM_DEBUG_OPTIONS
 )
 
 # https://cmake.org/cmake/help/latest/prop_tgt/CUDA_ARCHITECTURES.html
-set(GEMM_CUDA_ARCHITECTURES all-major)
+# set(GEMM_CUDA_ARCHITECTURES all-major)
+set(GEMM_CUDA_ARCHITECTURES "80")
+
 
 # =============================================================================
 # Source Files
