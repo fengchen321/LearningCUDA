@@ -16,77 +16,77 @@
 
 > 运行应用程序并将其性能分析捕获到 nsys-rep 文件
 
-| 参数 | 说明 |
-|------|------|
-| `-b, --backtrace` | 回溯方法：lbr, fp （-fno-omit-frame-pointer）, dwarf（-g）, none，默认lbr |
-| `-c, --capture-range` | 捕获范围：none, cudaProfilerApi, nvtx, hotkey |
-| `--capture-range-end` | 捕获范围结束行为：none, stop, stop-shutdown, repeat[:N], repeat-shutdown:N |
-| `--command-file` | 包含nsys开关的命令文件 |
-| `--cpu-core-events` | CPU核心事件采样，使用help查看完整列表 |
-| `--cpuctxsw` | CPU上下文切换跟踪：process-tree, system-wide, none |
-| `--cuda-event-trace` | 跟踪CUDA事件完成：auto, true, false |
-| `--cuda-flush-interval` | CUDA数据刷新间隔（毫秒） |
-| `--cuda-graph-trace` | CUDA图跟踪粒度：graph/node[:host-only/host-and-device] |
-| `--cuda-memory-usage` | 跟踪GPU内存使用：true, false |
-| `--cuda-trace-all-apis` | 跟踪所有CUDA API：true, false |
-| `--cuda-um-cpu-page-faults` | 跟踪统一内存CPU页错误：true, false |
-| `--cuda-um-gpu-page-faults` | 跟踪统一内存GPU页错误：true, false |
-| `--cudabacktrace` | CUDA API回溯收集：all,none,kernel,memory,sync,other |
-| `-d, --duration` | 采集持续时间（秒），默认0 |
-| `--dask` | Dask跟踪：functions-trace, none |
-| `--debug-symbols` | 符号文件目录路径（冒号分隔） |
-| `--duration-frames` | 停止前捕获的帧数，最小60 |
-| `-e, --env-var` | 设置环境变量，格式：A=B,C=D |
-| `--event-sample` | 事件采样：system-wide, none |
-| `--event-sampling-interval` | 事件采样间隔（毫秒），默认10 |
-| `--export` | 导出格式：none, sqlite, hdf, text, json, arrow, arrowdir, parquetdir |
-| `-f, --force-overwrite` | 覆盖现有文件：true, false |
-| `--flush-on-cudaprofilerstop` | cudaProfilerStop时刷新缓冲区：true, false |
-| `--ftrace` | 收集ftrace事件，格式：subsystem1/event1,subsystem2/event2 |
-| `--ftrace-keep-user-config` | 保持用户ftrace配置：true, false |
-| `--gpu-metrics-devices` | GPU指标设备：none, cuda-visible, all, 或GPU ID列表 |
-| `--gpu-metrics-frequency` | GPU指标采样频率（Hz），默认10000 |
-| `--gpu-metrics-set` | GPU指标集别名，使用help查看 |
-| `--gpu-video-device` | GPU视频加速器跟踪设备 |
-| `--gpuctxsw` | 跟踪GPU上下文切换：true, false |
-| `--hotkey-capture` | 热键触发：F1-F12，默认F12 |
-| `--ib-net-info-devices` | InfiniBand NIC名称列表 |
-| `--ib-net-info-files` | ibdiagnet db_csv文件路径列表 |
-| `--ib-net-info-output` | ibdiagnet网络发现数据输出目录 |
-| `--kill` | 终止信号：none, sigkill, sigterm, 或信号号 |
-| `--mpi-impl` | MPI实现：openmpi, mpich |
-| `-n, --inherit-environment` | 继承环境变量：true, false，默认true |
-| `--nic-metrics` | 收集NIC/HCA指标：true, false |
-| `--nvtx-domain-include` | NVTX域包含列表 |
-| `--nvtx-domain-exclude` | NVTX域排除列表 |
-| `-o, --output` | 输出报告文件名，支持%q{ENV}, %h, %p, %n, %% |
-| `--opengl-gpu-workload` | 跟踪OpenGL GPU负载：true, false |
-| `--os-events` | OS事件采样，使用help查看完整列表 |
-| `--osrt-backtrace-stack-size` | OS运行时回溯栈大小（字节），默认6144 |
-| `--osrt-backtrace-threshold` | OS运行时回溯阈值（纳秒），默认80000 |
-| `--osrt-threshold` | OS运行时API阈值（纳秒），默认1000 |
-| `-p, --nvtx-capture` | NVTX捕获范围：range@domain, range, range@* |
-| `--python-backtrace` | Python回溯收集：cuda, none |
-| `--python-functions-trace` | Python函数跟踪JSON文件路径 |
-| `--python-sampling` | Python回溯采样：true, false |
-| `--python-sampling-frequency` | Python采样频率（Hz），默认1000 |
-| `--pytorch` | PyTorch跟踪：autograd-nvtx, autograd-shapes-nvtx, functions-trace, none |
-| `--resolve-symbols` | 解析符号：true, false |
-| `--run-as` | 以指定用户身份运行 |
-| `-s, --sample` | CPU采样：process-tree, system-wide, none |
-| `--samples-per-backtrace` | 每个回溯的CPU样本数，默认1 |
-| `--sampling-period` | 采样周期，默认1350496 |
-| `--session-new` | 启动新的命名会话 |
-| `--start-frame-index` | 开始帧索引，最小1 |
-| `--stats` | 采集后生成统计信息：true, false |
-| `-t, --trace` | 要跟踪的API：cuda, cuda-hw, nvtx, cublas, cublas-verbose, cusolver, cusolver-verbose, cusparse, cusparse-verbose, mpi, oshmem, ucx, osrt, cudnn, opengl, opengl-annotations, openacc, openmp, nvvideo, vulkan, vulkan-annotations, python-gil, gds, none |
-| `--trace-fork-before-exec` | fork后exec前跟踪：true, false |
-| `--vulkan-gpu-workload` | Vulkan GPU负载跟踪：individual, batch, none, true, false |
-| `-w, --show-output` | 显示进程输出：true, false |
-| `--wait` | 等待进程终止：primary, all，默认all |
-| `-x, --stop-on-exit` | 应用退出时停止分析：true, false |
-| `-Y, --start-later` | 延迟启动直到nsys start执行：true, false |
-| `-y, --delay` | 采集开始延迟（秒），默认0 |
+| 参数 | 说明 | 权限 |
+|------|------|------|
+| `-b, --backtrace` | 回溯方法：lbr, fp (-fno-omit-frame-pointer), dwarf(-g), none，默认lbr | 无 |
+| `-c, --capture-range` | 捕获范围：none, cudaProfilerApi, nvtx, hotkey | 无 |
+| `--capture-range-end` | 捕获范围结束行为：none, stop, stop-shutdown, repeat[:N], repeat-shutdown:N | 无 |
+| `--command-file` | 包含nsys开关的命令文件 | 无 |
+| `--cpu-core-events` | CPU核心事件采样，使用help查看完整列表 | 无 |
+| `--cpuctxsw` | CPU上下文切换跟踪：process-tree, system-wide, none | system-wide ⚠️ |
+| `--cuda-event-trace` | 跟踪CUDA事件完成：auto, true, false | 无 |
+| `--cuda-flush-interval` | CUDA数据刷新间隔（毫秒） | 无 |
+| `--cuda-graph-trace` | CUDA图跟踪粒度：graph/node[:host-only/host-and-device] | 无 |
+| `--cuda-memory-usage` | 跟踪GPU内存使用：true, false | 无 |
+| `--cuda-trace-all-apis` | 跟踪所有CUDA API：true, false | 无 |
+| `--cuda-um-cpu-page-faults` | 跟踪统一内存CPU页错误：true, false | 无 |
+| `--cuda-um-gpu-page-faults` | 跟踪统一内存GPU页错误：true, false | 无 |
+| `--cudabacktrace` | CUDA API回溯收集：all,none,kernel,memory,sync,other | 无 |
+| `-d, --duration` | 采集持续时间（秒），默认0 | 无 |
+| `--dask` | Dask跟踪：functions-trace, none | 无 |
+| `--debug-symbols` | 符号文件目录路径（冒号分隔） | 无 |
+| `--duration-frames` | 停止前捕获的帧数，最小60 | 无 |
+| `-e, --env-var` | 设置环境变量，格式：A=B,C=D | 无 |
+| `--event-sample` | 事件采样：system-wide, none | system-wide ⚠️ |
+| `--event-sampling-interval` | 事件采样间隔（毫秒），默认10 | 无 |
+| `--export` | 导出格式：none, sqlite, hdf, text, json, arrow, arrowdir, parquetdir | 无 |
+| `-f, --force-overwrite` | 覆盖现有文件：true, false | 无 |
+| `--flush-on-cudaprofilerstop` | cudaProfilerStop时刷新缓冲区：true, false | 无 |
+| `--ftrace` | 收集ftrace事件，格式：subsystem/event | ⚠️ root |
+| `--ftrace-keep-user-config` | 保持用户ftrace配置：true, false | ⚠️ root |
+| `--gpu-metrics-devices` | GPU指标设备：none, cuda-visible, all, 或GPU ID列表 | 无 |
+| `--gpu-metrics-frequency` | GPU指标采样频率（Hz），默认10000，高频需root | 高频 ⚠️ |
+| `--gpu-metrics-set` | GPU指标集别名，使用help查看 | 无 |
+| `--gpu-video-device` | GPU视频加速器跟踪设备 | 无 |
+| `--gpuctxsw` | 跟踪GPU上下文切换：true, false | 无 |
+| `--hotkey-capture` | 热键触发：F1-F12，默认F12 | 无 |
+| `--ib-net-info-devices` | InfiniBand NIC名称列表 查看 IB/RoCE 设备ibstat或ibv_devinfo或ls /sys/class/infiniband/ | ⚠️ root |
+| `--ib-net-info-files` | ibdiagnet db_csv文件路径列表 | ⚠️ root |
+| `--ib-net-info-output` | ibdiagnet网络发现数据输出目录 | ⚠️ root |
+| `--kill` | 终止信号：none, sigkill, sigterm, 或信号号 | 无 |
+| `--mpi-impl` | MPI实现：openmpi, mpich | 无 |
+| `-n, --inherit-environment` | 继承环境变量：true, false，默认true | 无 |
+| `--nic-metrics` | 收集NIC/HCA指标：true, false | 无 |
+| `--nvtx-domain-include` | NVTX域包含列表 | 无 |
+| `--nvtx-domain-exclude` | NVTX域排除列表 | 无 |
+| `-o, --output` | 输出报告文件名，支持%q{ENV}, %h, %p, %n, %% | 无 |
+| `--opengl-gpu-workload` | 跟踪OpenGL GPU负载：true, false | 无 |
+| `--os-events` | OS事件采样，使用help查看完整列表 | ⚠️ root |
+| `--osrt-backtrace-stack-size` | OS运行时回溯栈大小（字节），默认6144 | 无 |
+| `--osrt-backtrace-threshold` | OS运行时回溯阈值（纳秒），默认80000 | 无 |
+| `--osrt-threshold` | OS运行时API阈值（纳秒），默认1000 | 无 |
+| `-p, --nvtx-capture` | NVTX捕获范围：range@domain, range, range@* | 无 |
+| `--python-backtrace` | Python回溯收集：cuda, none | 无 |
+| `--python-functions-trace` | Python函数跟踪JSON文件路径 | 无 |
+| `--python-sampling` | Python回溯采样：true, false | 无 |
+| `--python-sampling-frequency` | Python采样频率（Hz），默认1000 | 无 |
+| `--pytorch` | PyTorch跟踪：autograd-nvtx, autograd-shapes-nvtx, functions-trace, none | 无 |
+| `--resolve-symbols` | 解析符号：true, false | 无 |
+| `--run-as` | 以指定用户身份运行 | ⚠️ root |
+| `-s, --sample` | CPU采样：process-tree, system-wide, none | system-wide ⚠️ |
+| `--samples-per-backtrace` | 每个回溯的CPU样本数，默认1 | 无 |
+| `--sampling-period` | 采样周期，默认1350496 | 无 |
+| `--session-new` | 启动新的命名会话 | 无 |
+| `--start-frame-index` | 开始帧索引，最小1 | 无 |
+| `--stats` | 采集后生成统计信息：true, false | 无 |
+| `-t, --trace` | 要跟踪的API：cuda, cuda-hw, nvtx, cublas, cublas-verbose, cusolver, cusolver-verbose, cusparse, cusparse-verbose, mpi, oshmem, ucx, osrt, cudnn, opengl, opengl-annotations, openacc, openmp, nvvideo, vulkan, vulkan-annotations, python-gil, gds, none | 无 |
+| `--trace-fork-before-exec` | fork后exec前跟踪：true, false | 无 |
+| `--vulkan-gpu-workload` | Vulkan GPU负载跟踪：individual, batch, none, true, false | 无 |
+| `-w, --show-output` | 显示进程输出：true, false | 无 |
+| `--wait` | 等待进程终止：primary, all，默认all | 无 |
+| `-x, --stop-on-exit` | 应用退出时停止分析：true, false | 无 |
+| `-Y, --start-later` | 延迟启动直到nsys start执行：true, false | 无 |
+| `-y, --delay` | 采集开始延迟（秒），默认0 | 无 |
 
 ```shell
 # 基础采集，生成统计信息
@@ -101,21 +101,25 @@ nsys profile -e TEST_ONLY=0 -y 0.1 -o nsys_profile_e_y_0_1 ./GEMM/profile_cuda_g
 
 # 系统级分析：ftrace+OS事件+上下文切换（需root权限）
 # sudo cat /sys/kernel/debug/tracing/available_events 查看fptrace event
-sudo nsys profile --ftrace=drm/* --event-sample=system-wide --os-events=cpu-clock \
-	--cpuctxsw=system-wide -d 20 \
+sudo /usr/local/bin/nsys profile --ftrace=drm/* -d 20 \
     -o nsys_profile_ftrace ./GEMM/profile_cuda_gemm_fp32
 
+# 捕获 CPU 软件事件、上下文切换和周期性采样
+sudo /usr/local/bin/nsys profile --event-sample=system-wide --os-events=0 \
+	--cpuctxsw=system-wide -d 20 \
+    -o nsys_profile_sample_os_event_cpuctxsw ./GEMM/profile_cuda_gemm_fp32
+
 # GPU指标采集，20kHz频率 （需root权限）
-nsys profile --gpu-metrics-devices=all --gpu-metrics-frequency=20000 \
+sudo /usr/local/bin/nsys profile --gpu-metrics-devices=all --gpu-metrics-frequency=20000 \
     --gpu-metrics-set=ga100 -o nsys_profile_gpu_metrics ./GEMM/profile_cuda_gemm_fp32
 
 # 系统级CPU采样（需root权限）
-sudo nsys profile --sample=system-wide -d 5 -o nsys_profile_system_sample ./GEMM/profile_cuda_gemm_fp32
+sudo /usr/local/bin/nsys profile --sample=system-wide -d 5 -o nsys_profile_system_sample ./GEMM/profile_cuda_gemm_fp32
 
 # 性能调优：CPU采样+回溯 默认lbr只能看Bottom-Up View，设置--backtrace=dwarf后可以看Top-Down和Flat
 nsys profile  --sample=process-tree --backtrace=lbr \
   	-o nsys_profile_gpu_sample_backtrace ./GEMM/profile_cuda_gemm_fp32
-  	
+
 # 统一内存诊断：CPU+GPU页错误跟踪
 nsys profile --cuda-memory-usage=true --cuda-um-cpu-page-faults=true --cuda-um-gpu-page-faults=true -o nsys_profile_memory_cudaum ./GEMM/profile_cuda_gemm_fp32
 
@@ -124,6 +128,14 @@ nsys profile --nic-metrics=true -o nsys_profile_nic ./GEMM/profile_cuda_gemm_fp3
 
 # 获取InfiniBand 交换机性能指标 (root) sudo ibswitches -C <nic name>; sudo ibnetdiscover -S
 nsys profile --ib-switch-metrics-devices=<IB switch GUID> ./GEMM/profile_cuda_gemm_fp32
+
+# InfiniBand网络发现数据输出（root）
+sudo nsys profile --ib-net-info-devices=mlx5_0 --ib-net-info-output=/tmp/ib_output -o nsys_ib_net ./GEMM/profile_cuda_gemm_fp32
+
+# 以指定用户身份运行（root）
+sudo nsys profile --run-as=user_name -o nsys_run_as ./GEMM/profile_cuda_gemm_fp32
+
+
 # 多框架分析：Python+PyTorch+Dask
 
 # 精确捕获范围区域
@@ -135,6 +147,19 @@ nsys profile \
   ./demo
 
 nsys profile -y 2 -d 5 ./demo  # 跳过前2秒，抓取5秒数据
+
+#  综合系统级分析（root）- 所有高权限功能 
+sudo /usr/local/bin/nsys profile \
+    --sample=system-wide \
+    --cpuctxsw=system-wide \
+    --event-sample=system-wide \
+    --os-events=0 \
+    --ftrace="sched/*,irq/*" \
+    --gpu-metrics-frequency=20000 \
+    --gpu-metrics-devices=all \
+    -d 20 \
+    -o nsys_full_system_analysis \
+    ./GEMM/profile_cuda_gemm_fp32
 ```
 
 ![image-20260105145244935](./nsys.assets/nsys_profile_status_true_cli_0.png)
@@ -149,7 +174,7 @@ nsys常用快捷按键：
 >
 > 过滤区域：鼠标左键选择一块timeline区域然后 右键选择Filter 后续右键移除该filter即可。
 >
-> 鼠标悬浮看具体的信息，比如Threads里黑色：CPU利用率，黄色：采样点；绿色：运行
+> 鼠标悬浮看具体的信息，比如Threads里黑色：CPU核心利用率，黄色：采样点；绿色：线程状态（运行+等待）
 
 Analysis Summar 展示的是分析概要，包含指令配置，CPU，GPU， NIC网格信息,环境变量等信息。
 

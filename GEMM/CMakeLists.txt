@@ -35,6 +35,7 @@ set(GEMM_COMMON_WARNINGS
 
 set(GEMM_CUDA_WARNINGS
     -Xcompiler=${GEMM_COMMON_WARNINGS}
+    -lineinfo
 )
 
 # Debug specific options - only apply in Debug build
