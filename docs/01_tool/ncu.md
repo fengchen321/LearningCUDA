@@ -1,6 +1,6 @@
 # NVIDIA Nsight Compute
 
-[ncu下载](https://developer.nvidia.com/tools-overview/nsight-compute/get-started)  [User Guide](https://docs.nvidia.com/nsight-compute/) [NsightComputeCli](https://docs.nvidia.com/nsight-compute/NsightComputeCli/index.html)
+[ncu下载](https://developer.nvidia.com/tools-overview/nsight-compute/get-started)  [User Guide](https://docs.nvidia.com/nsight-compute/) [NsightComputeCli](https://docs.nvidia.com/nsight-compute/NsightComputeCli/index.html) [ProfilingGuide](https://docs.nvidia.com/nsight-compute/ProfilingGuide/index.html) [nsightCompute](https://docs.nvidia.com/nsight-compute/NsightCompute/index.html)
 
 **主要功能**
 
@@ -9,16 +9,6 @@
 - **调试支持**：支持内核调试，帮助开发者定位和修复代码中的错误。
 
 [相关指令信息](../data/ncu_help)
-
-```shell
-# Nsight Compute可能需要额外权限来访问GPU性能计数器
-# 临时设置
-sudo sh -c 'echo 1 > /proc/sys/kernel/perf_event_paranoid'
-
-# 永久设置
-echo 'kernel.perf_event_paranoid=1' | sudo tee -a /etc/sysctl.conf
-sudo sysctl -p
-```
 
 ## General Options
 
@@ -310,32 +300,6 @@ section是指一组 metrics，如果未指定section,则按照与默认的set关
 | **WarpStateStats** | Warp状态统计（停顿原因、分支发散） |
 | **SourceCounters** | 源级计数器（按源代码行统计） |
 
-**SpeedOfLight (SOL) 解读：**
-
-SOL 表示内核性能与 GPU 理论最大值的比率，是判断瓶颈的重要指标。
-
-| 指标 | 说明 | 优化方向 |
-|------|------|---------|
-| **SM Throughput** | SM计算利用率（% of peak） | 增加指令并行、减少分支发散 |
-| **Memory Throughput** | 内存带宽利用率（% of peak） | 优化合并访存、减少全局内存访问 |
-| **Tensor Throughput** | Tensor Core利用率（% of peak） | 使用 Tensor Core、FP8/FP16 |
-| **Compute Roofline** | 计算屋顶线 | 计算受限分析 |
-| **Memory Roofline** | 内存屋顶线 | 内存受限分析 |
-
-**示例解读：**
-```
-SM Throughput: 45% + Memory Throughput: 78% = Memory Bound（内存瓶颈）
-SM Throughput: 85% + Memory Throughput: 30% = Compute Bound（计算瓶颈）
-```
-
-| SOL值 | 含义 |
-|-------|------|
-| < 50% | 较大优化空间 |
-| 50-80% | 中等优化空间 |
-| 80-95% | 接近硬件极限 |
-| > 95% | 几乎无优化空间 |
-
-
 ## Filter Profile Options
 
 | 参数 | 说明 |
@@ -552,3 +516,264 @@ sudo /usr/local/cuda/bin/ncu --print-metric-attribution ./profile_demo/basic 1
 sudo /usr/local/cuda/bin/ncu  --csv --print-details=all --print-metric-instances=details \
     --print-metric-name=name -o ncu_csv_print_details_metrics ./GEMM/profile_cuda_gemm_fp32
 ```
+
+## 常用分析流程
+
+```shell
+# 完整分析集
+sudo /usr/local/cuda/bin/ncu --set full -o ncu_set_full ./GEMM/profile_cuda_gemm_fp32
+
+sudo /usr/local/cuda/bin/ncu -k gemm_v00 -s 2 -c 1 --page=details --print-details=all ./GEMM/profile_cuda_gemm_fp32
+
+sudo /usr/local/cuda/bin/ncu --kernel-id=1:20:gemm_v00:5 -o ncu_kernel_id ./GEMM/profile_cuda_gemm_fp32
+```
+
+## 显示介绍
+
+ncu 生成的分析报告包含丰富的信息，学会解读这些数据是性能调优的关键。
+
+### 报告结构概览
+
+ncu 报告分为三个主要页面：
+
+| 页面 | 说明 | 主要用途 |
+|------|------|----------|
+| **Summary** | 内核汇总列表 | 快速定位最耗时的内核 |
+| **Details** | 详细指标数据 | 深度分析性能瓶颈 |
+| **Source** | 源代码关联 | 定位到具体代码行 |
+
+### Summary 页面
+
+![image-20260122172848733](./ncu.assets/ncu_Summary_page.png)
+
+Summary 页面展示所有被分析内核的概览信息：（Result位置选择后对应列表显示阴影，或者表格中双击该位置也会自动跳转）
+
+| 字段 | 说明 |
+|------|------|
+| **ID** | 每个内核的唯一标识符 |
+| **Function Name** | 内核函数名称 |
+| **Demangled Name** | 去修饰后的函数名 |
+| **Duration** | 内核执行时间（ns） |
+| **Estimated Speedup** | 预估加速比（基于优化建议） |
+| **Compute Throughput** | SM 计算吞吐量利用率 |
+| **Memory Throughput** | 内存带宽利用率 |
+| **Registers/Thread** | 每个线程使用的寄存器数 |
+| **Grid Size** | 网格大小（block 数） |
+| **Block Size** | 块大小（thread 数） |
+
+**使用技巧：**
+- 按 Duration 排序，快速定位最慢的内核
+- Estimated Speedup 高的内核优先优化
+- Compute/Memory Throughput 失衡说明存在瓶颈
+
+### Details 页面
+
+```shell
+ncu --import ./ncu_set_full.ncu-rep --kernel-id :::28 # 5777-gemm_v00 在ui中显示是27，所以第28个kernel
+ncu --import ./ncu_set_full.ncu-rep --kernel-id :::28 --page=details
+```
+
+Details 页面是性能分析的核心，包含多个 section，每个 section 聚焦特定方面的指标。
+
+#### GPU Speed Of Light Throughput（核心瓶颈定位）
+
+```shell
+ncu --list-sections
+ncu --import ./ncu_set_full.ncu-rep --kernel-id :::28 --section=SpeedOfLight
+```
+
+![image-20260122173042944](./ncu.assets/ncu_SOL_Throughput.png)
+
+这是**最重要的 section**，首先查看这里判断瓶颈类型：
+
+**快速判断瓶颈：**
+
+| Memory > 80% | Compute > 80% | 结论 |
+|--------------|---------------|------|
+| 91.99% | 61.25% | **内存受限** |
+| 30% | 90% | **计算受限** |
+| 85% | 85% | **平衡** |
+
+**内存层次结构分析：**
+
+| 层级 | 利用率 | 状态 | 含义 |
+|------|--------|------|------|
+| L1/TEX | 93.57% | 🔴 饱和 | 持续从全局内存加载数据 |
+| L2 | 15.02% | 🟢 空闲 | 大部分访问命中 L1 |
+| DRAM | 0.45% | 🟢 空闲 | 数据重用性好 |
+
+**本例分析：**
+
+- L1 高但 DRAM 低 → 数据局部性不错，但 L1 访问本身成为瓶颈
+- 优化方向：减少全局内存访问、增加共享内存复用
+
+##### Throughput Breakdown（计算指令分解，内存访问路径）
+
+```shell
+ncu --import ./ncu_set_full.ncu-rep --kernel-id :::28 --section=SpeedOfLight
+```
+
+![image-20260122180735085](./ncu.assets/ncu_SOL_Thoughput_Breakdown.png)
+
+**分析要点：**
+- LSU 高说明**内存指令多**，是内存瓶颈的根源
+- ALU 高说明计算密集
+- FMA 高说明浮点计算为主，考虑 Tensor Core 优化
+
+**本例分析：**
+
+- LSU (61.25%) > ALU (50.22%) > FMA (31.04%)
+- 内存指令主导，印证了 Memory Bound 的判断
+
+**内存访问路径：**
+```
+全局内存 → L2 Cache → L1/TEX Cache → 寄存器
+    ↓
+DRAM 0.45% ← L2 15.02% ← L1 91.99%
+```
+
+**优化思路：**
+- L1 高、DRAM 低 → **增加数据复用**，减少重复加载
+- L2 高 → **提高数据局部性**，增加重用距离
+- DRAM 高 → **合并访存**，减少事务数
+
+#####  Roofline
+
+![image-20260122191316618](./ncu.assets/ncu_SOL_Roofline.png)
+
+####  PM Sampling
+
+```shell
+ncu --import ./ncu_set_full.ncu-rep --kernel-id :::28 --section=PmSampling
+```
+
+![image-20260122173240136](./ncu.assets/ncu_pm_sampling.png)
+
+#### Compute Workload Analysis
+
+```shell
+ncu --import ./ncu_set_full.ncu-rep --kernel-id :::28 --section=ComputeWorkloadAnalysis
+```
+
+![image-20260122173314874](./ncu.assets/ncu_compute_workload_analysis.png)
+
+#### Memory Workload Analysis
+
+```shell
+ncu --import ./ncu_set_full.ncu-rep --kernel-id :::28 --section=MemoryWorkloadAnalysis
+```
+
+![image-20260122173402983](./ncu.assets/ncu_memory_chart.png)
+
+#### Schedular Statistic (调度器统计)
+
+```shell
+ncu --import ./ncu_set_full.ncu-rep --kernel-id :::28 --section=SchedulerStats
+```
+
+![image-20260122173426602](./ncu.assets/ncu_scheduler_statistics.png)
+
+#### Warp State Statistic (Warp 状态)
+
+```shell
+ncu --import ./ncu_set_full.ncu-rep --kernel-id :::28 --section=WarpStateStats
+```
+
+![image-20260122173457793](./ncu.assets/ncu_warp_state_statistics.png)
+
+#### Instruction Statistics
+
+```shell
+ncu --import ./ncu_set_full.ncu-rep --kernel-id :::28 --section=InstructionStats
+```
+
+![image-20260122173530217](./ncu.assets/ncu_instruction_statistics.png)
+
+#### Launch Statistics（启动配置）
+
+```shell
+ncu --import ./ncu_set_full.ncu-rep --kernel-id :::28 --section=LaunchStats
+```
+
+![image-20260122173641100](./ncu.assets/ncu_launch_statistics.png)
+
+**尾效问题（Tail Effect）：** todo
+
+```
+Waves Per SM: 4.74
+Full waves: 4
+Partial wave: 640 blocks (占 20% 潜在开销)
+```
+
+**问题分析：**当前 SM 数: 108; Grid: 4,096 / 108 = 37.9 blocks/SM; 4 个完整 wave = 4 × 32 = 128 blocks; 第 5 个 wave 只有 37.9 - 32 = 5.9 个 blocks; 部分 wave 可能造成 20% 性能损失
+
+**解决方案：**
+
+```bash
+# 调整 grid size 使 block 数整除 SM 数
+# 建议 grid: 108 × 32 = 3,456 (4 waves) 或 108 × 64 = 6,912 (8 waves)
+```
+
+#### Occupancy（占用率分析）
+
+```shell
+ncu --import ./ncu_set_full.ncu-rep --kernel-id :::28 --section=Occupancy
+```
+
+![image-20260122173556155](./ncu.assets/ncu_occupancy.png)
+
+#### GPU and Memory Workload Distribution
+
+```shell
+ncu --import ./ncu_set_full.ncu-rep --kernel-id :::28 --section=WorkloadDistribution
+```
+
+![image-20260122175304500](./ncu.assets/ncu_gpu_and_momory_workload_distribution.png)
+
+#### Source Counters（源代码级分析）
+
+```shell
+ncu --import ./ncu_set_full.ncu-rep --kernel-id :::28 --section=SourceCounters
+```
+
+![image-20260122175332101](./ncu.assets/ncu_source_counters.png)
+
+将性能指标关联到具体的源代码行，定位热点代码。
+
+### source page
+
+```shell
+ncu --import ./ncu_import_source.ncu-rep --kernel-id :::28 --page=source
+ncu --import ./ncu_import_source.ncu-rep --kernel-id :::28 --page=source --print-source=cuda,sass
+```
+
+![image-20260122173835728](./ncu.assets/ncu_source.png)
+
+source 页面展示：
+- 源代码与 SASS 汇编的对应关系
+- 每行代码的指令数、周期数
+- 内存访问模式
+
+### Context
+
+![image-20260122195200029](./ncu.assets/ncu_context.png)
+
+### raw
+
+所有原始数据。
+
+```shell
+ncu --import ncu_set_full.ncu-rep --page=raw
+```
+
+![image-20260122195241256](./ncu.assets/ncu_raw)
+
+### session
+
+整个session的配置信息。
+
+```shell
+ncu --import ncu_set_full.ncu-rep --page=session
+```
+
+![image-20260122195337109](./ncu.assets/ncu_session.png)
