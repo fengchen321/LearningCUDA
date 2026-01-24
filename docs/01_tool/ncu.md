@@ -1,6 +1,14 @@
 # NVIDIA Nsight Compute
 
-[ncu下载](https://developer.nvidia.com/tools-overview/nsight-compute/get-started)  [User Guide](https://docs.nvidia.com/nsight-compute/) [NsightComputeCli](https://docs.nvidia.com/nsight-compute/NsightComputeCli/index.html) [ProfilingGuide](https://docs.nvidia.com/nsight-compute/ProfilingGuide/index.html) [nsightCompute](https://docs.nvidia.com/nsight-compute/NsightCompute/index.html)
+[ncu下载](https://developer.nvidia.com/tools-overview/nsight-compute/get-started)  
+
+[User Guide](https://docs.nvidia.com/nsight-compute/)
+
+ [NsightComputeCli](https://docs.nvidia.com/nsight-compute/NsightComputeCli/index.html) 
+
+[ProfilingGuide](https://docs.nvidia.com/nsight-compute/ProfilingGuide/index.html) 
+
+[nsightCompute](https://docs.nvidia.com/nsight-compute/NsightCompute/index.html)
 
 **主要功能**
 
@@ -45,7 +53,7 @@ MPS (Multi-Process Service) 是 CUDA 的多进程服务，允许多个 CPU 进�
 
 **为什么用 MPS？**
 - 传统模式：每个 CUDA 进程独立创建 GPU 上下文，上下文切换有开销
-- MPS 模式：多个进程共享一个 GPU 上下文，消除上下文切换开销
+- MPS 模式：多个进程共享 GPU 上下文，避免各自创建上下文的开销
 - 适用场景：多进程推理、容器环境、多租户云服务器
 
 | 参数 | 说明 |
@@ -419,11 +427,6 @@ sudo /usr/local/cuda/bin/ncu \
 | `--warp-sampling-max-passes` | Warp状态采样最大pass数，默认5 |
 | `--warp-sampling-buffer-size` | Warp状态采样缓冲区大小（字节），默认33554432 |
 
-**采样频率计算**：实际频率 = 2^(5 + interval)，例如：
-- interval=0 → 2^5 = 32Hz（最高频率）
-- interval=10 → 2^15 = 32768Hz
-- interval=20 → 2^25 = 33MHz（最低频率）
-
 ```shell
 # 完整Warp采样配置
 sudo /usr/local/cuda/bin/ncu \
@@ -532,6 +535,14 @@ sudo /usr/local/cuda/bin/ncu --kernel-id=1:20:gemm_v00:5 -o ncu_kernel_id ./GEMM
 
 ncu 生成的分析报告包含丰富的信息，学会解读这些数据是性能调优的关键。
 
+### 阅读建议（按使用阶段）
+
+- **快速定位瓶颈**：`Summary → SpeedOfLight → Roofline`
+- **判断瓶颈成因**：`Memory / Compute Workload Analysis`
+- **确认是否 stall**：`SchedulerStats → WarpStateStats`
+- **定位代码位置**：`SourceCounters → Source`
+- **验证是否代表性问题**：`Statistics / PM Sampling`
+
 ### 报告结构概览
 
 ncu 报告分为三个主要页面：
@@ -548,13 +559,21 @@ ncu 报告分为三个主要页面：
 
 Summary 页面展示所有被分析内核的概览信息：（Result位置选择后对应列表显示阴影，或者表格中双击该位置也会自动跳转）
 
+可悬浮鼠标在指标位置显示具体信息，并且可以钉住。
+
+summary下半部分诊断信息：
+
+* `L1TEX Global Load Access Pattern`：全局内存访问合并效率偏低（sector 利用率不足）
+* `Tail Effect`：grid/block 配置导致 wave 数不能整除 SM，存在部分 wave 空转（参考 [LaunchStatistics](####Launch Statistics（启动配置）)）
+* `long Scoreboard Stalls` : warp 在等 L1TEX 数据
+
 | 字段 | 说明 |
 |------|------|
 | **ID** | 每个内核的唯一标识符 |
 | **Function Name** | 内核函数名称 |
 | **Demangled Name** | 去修饰后的函数名 |
 | **Duration** | 内核执行时间（ns） |
-| **Estimated Speedup** | 预估加速比（基于优化建议） |
+| **Estimated Speedup** | 预估加速比（假设对应瓶颈被完全消除的理论上限） |
 | **Compute Throughput** | SM 计算吞吐量利用率 |
 | **Memory Throughput** | 内存带宽利用率 |
 | **Registers/Thread** | 每个线程使用的寄存器数 |
@@ -598,7 +617,7 @@ ncu --import ./ncu_set_full.ncu-rep --kernel-id :::28 --section=SpeedOfLight
 
 | 层级 | 利用率 | 状态 | 含义 |
 |------|--------|------|------|
-| L1/TEX | 93.57% | 🔴 饱和 | 持续从全局内存加载数据 |
+| L1/TEX | 93.57% | 🔴 饱和 | L1 高频访问成为瓶颈 |
 | L2 | 15.02% | 🟢 空闲 | 大部分访问命中 L1 |
 | DRAM | 0.45% | 🟢 空闲 | 数据重用性好 |
 
@@ -609,37 +628,29 @@ ncu --import ./ncu_set_full.ncu-rep --kernel-id :::28 --section=SpeedOfLight
 
 ##### Throughput Breakdown（计算指令分解，内存访问路径）
 
-```shell
-ncu --import ./ncu_set_full.ncu-rep --kernel-id :::28 --section=SpeedOfLight
-```
-
-![image-20260122180735085](./ncu.assets/ncu_SOL_Thoughput_Breakdown.png)
-
-**分析要点：**
-- LSU 高说明**内存指令多**，是内存瓶颈的根源
-- ALU 高说明计算密集
-- FMA 高说明浮点计算为主，考虑 Tensor Core 优化
-
-**本例分析：**
-
-- LSU (61.25%) > ALU (50.22%) > FMA (31.04%)
-- 内存指令主导，印证了 Memory Bound 的判断
-
-**内存访问路径：**
-```
-全局内存 → L2 Cache → L1/TEX Cache → 寄存器
-    ↓
-DRAM 0.45% ← L2 15.02% ← L1 91.99%
-```
-
-**优化思路：**
-- L1 高、DRAM 低 → **增加数据复用**，减少重复加载
-- L2 高 → **提高数据局部性**，增加重用距离
-- DRAM 高 → **合并访存**，减少事务数
+![image-20260122180735085](./ncu.assets/ncu_SOL_Throughput_Breakdown.png)
 
 #####  Roofline
 
 ![image-20260122191316618](./ncu.assets/ncu_SOL_Roofline.png)
+
+Roofline 图通过算术强度（FLOP/Byte）与硬件峰值对比，判断 kernel 当前是 **内存受限还是计算受限**，并明确其 **距离理论上限的结构性限制与可优化空间**。
+
+- **上方的水平线**：**单精度（FP32）峰值性能**
+- **下方的水平线**：**双精度（FP64）峰值性能**
+
+kernel 的位置决定优化方向：左移解决访存，右移堆计算，上移减少 stall。
+
+```mermaid
+flowchart LR
+    A[Roofline 位置?] -->|拐点左侧?| B{是}
+    B -->|Memory Bound| C[优化访存]
+    A -->|否| D{近屋顶线?}
+    D -->|是| E[优化计算]
+    D -->|否| F{远低于屋顶线?}
+    F -->|是| G[查 Stall / 调度]
+    F -->|否| H[已接近极限]
+```
 
 ####  PM Sampling
 
@@ -649,6 +660,12 @@ ncu --import ./ncu_set_full.ncu-rep --kernel-id :::28 --section=PmSampling
 
 ![image-20260122173240136](./ncu.assets/ncu_pm_sampling.png)
 
+| 指标                      | 数值         | 解读           |
+| ------------------------- | ------------ | -------------- |
+| Maximum Buffer Size       | 917.50 KB    | 采样缓冲区大小 |
+| Maximum Sampling Interval | 20,000 cycle | 采样间隔       |
+| # Pass Groups             | 4            | 采样轮次       |
+
 #### Compute Workload Analysis
 
 ```shell
@@ -656,6 +673,20 @@ ncu --import ./ncu_set_full.ncu-rep --kernel-id :::28 --section=ComputeWorkloadA
 ```
 
 ![image-20260122173314874](./ncu.assets/ncu_compute_workload_analysis.png)
+
+```shell
+ncu --query-metrics-mode suffix --metrics sm__inst_executed --chip ga100 # 查看指标含义
+sm__inst_executed.avg.per_cycle_active
+```
+
+| 指标                 | 数值   | 解读                         |
+| -------------------- | ------ | ---------------------------- |
+| Executed Ipc Active  | 2.36   | 每个活跃周期执行 2.36 条指令 |
+| Executed Ipc Elapsed | 2.32   | 整体 IPC 略低于活跃期        |
+| Issue Slots Busy     | 58.09% | 指令发射槽利用率             |
+| SM Busy              | 58.09% | SM 忙碌程度                  |
+
+[Interpreting compute workload analysis in Nsight Compute ](https://stackoverflow.com/questions/61413176/interpreting-compute-workload-analysis-in-nsight-compute),    [what is IPC(Instructions Per Cycle)](https://forums.developer.nvidia.com/t/what-is-ipc-instructions-per-cycle/66138)
 
 #### Memory Workload Analysis
 
@@ -665,7 +696,18 @@ ncu --import ./ncu_set_full.ncu-rep --kernel-id :::28 --section=MemoryWorkloadAn
 
 ![image-20260122173402983](./ncu.assets/ncu_memory_chart.png)
 
-#### Schedular Statistic (调度器统计)
+逻辑单元以绿色（活跃）或灰色（非活跃）表示。
+
+物理单元以蓝色（活跃）或灰色（非活跃）表示。 
+
+| 缩写 | 全称                                    | 功能                                  |
+| :--- | :-------------------------------------- | :------------------------------------ |
+| ICC  | Instruction Constant Cache 指令常量缓存 | 缓存指令，服务TPC内所有SM             |
+| IMC  | Immediate Constant Cache                | 通过立即数常量引用访问的常量数据      |
+| IDC  | Indexed Constant Cache 索引常量缓存     | 通过LDC指令访问的常量数据缓存         |
+| GCC  | GPC Constant Cache                      | 缓存常量数据和指令，作为TPC缓存的上层 |
+
+#### Scheduler Statistics (调度器统计)
 
 ```shell
 ncu --import ./ncu_set_full.ncu-rep --kernel-id :::28 --section=SchedulerStats
@@ -673,13 +715,50 @@ ncu --import ./ncu_set_full.ncu-rep --kernel-id :::28 --section=SchedulerStats
 
 ![image-20260122173426602](./ncu.assets/ncu_scheduler_statistics.png)
 
-#### Warp State Statistic (Warp 状态)
+| 指标              | 数值   | 解读                                                         |
+| ----------------- | ------ | ------------------------------------------------------------ |
+| Active Warps/SM   | 14.89  | 活跃 warp 充足（max 16）                                     |
+| Eligible Warps/SM | 2.48   | 只有 2.48 个随时可发射                                       |
+| No Eligible       | 41.04% | 41% 的周期没有可发射的 warp<br /> 数据依赖或长延迟指令未被 ILP 或足够的 warp 数隐藏 |
+| Issued Warp/cycle | 0.59   | 每周期发射 0.59 个 warp                                      |
+
+#### Warp State Statistics (Warp 状态)
 
 ```shell
 ncu --import ./ncu_set_full.ncu-rep --kernel-id :::28 --section=WarpStateStats
 ```
-
+**warp state**: Unused 未使用 → Active活跃 → (Eligible就绪 ↔ Selected已选中) ↔ Stalled停滞
 ![image-20260122173457793](./ncu.assets/ncu_warp_state_statistics.png)
+
+| 指标                                   | 值           | 含义                                         |
+| -------------------------------------- | ------------ | -------------------------------------------- |
+| **Warp Cycles Per Issued Instruction** | 25.24 cycles | 发射间隔 25.24 cycles                        |
+| **Avg. Active Threads Per Warp**       | 32           | warp 完全满载，无分支发散（divergence-free） |
+| **Avg. Not Predicated-Off Threads**    | 31.98        | 几乎所有线程都参与执行                       |
+
+##### Typical Stall Reason
+
+ 按 stall 原因分类（概念层面）
+
+| Stall 原因                      | 说明                                                   |
+| ------------------------------- | ------------------------------------------------------ |
+| 指令获取 (Instruction Fetch)    | GPU 等待获取下一条指令                                 |
+| 内存依赖 (Memory Dependency)    | 当前指令需要前面内存操作的结果，未准备好就 stall       |
+| 执行依赖 (Execution Dependency) | 当前指令依赖前一条指令的计算结果，前一条没完成就 stall |
+| 管道忙 (Pipeline Busy)          | 执行单元繁忙，需要等待空闲管道                         |
+| 同步/Barrier (Synchronization)  | 遇到线程同步（如 `__syncthreads()`）或 warp barrier    |
+
+------
+
+按 Nsight Compute stall 类型整理（硬件/指标层面）
+
+| Stall 类型         | 可能原因 / 触发条件                                          |
+| ------------------ | ------------------------------------------------------------ |
+| Long Scoreboard    | L1Tex 结果依赖（Global、Local、Surface、Texture memory）     |
+| Short Scoreboard   | Shared memory 结果依赖；频繁的 MUFU（特殊功能单元操作）；Dynamic branching |
+| LG Throttle        | 等待 L1 指令队列未满（Local / Global 内存操作），极高频率访问 local/global 内存时出现 |
+| MIO Throttle       | 等待 MIO 队列未满；极高频率 LDS、MUFU 或 Dynamic Branching 时出现 |
+| Math Pipe Throttle | 等待执行单元（算术/数学管道）可用，管道忙造成的 stall        |
 
 #### Instruction Statistics
 
@@ -689,6 +768,12 @@ ncu --import ./ncu_set_full.ncu-rep --kernel-id :::28 --section=InstructionStats
 
 ![image-20260122173530217](./ncu.assets/ncu_instruction_statistics.png)
 
+| 检查项                 | 结果 | 说明               |
+| ---------------------- | ---- | ------------------ |
+| Local Memory Spilling  | 0    | 无寄存器溢出       |
+| Shared Memory Spilling | 0    | 无 shared mem 溢出 |
+| Issued vs Executed     | 一致 | 指令正常执行       |
+
 #### Launch Statistics（启动配置）
 
 ```shell
@@ -697,22 +782,20 @@ ncu --import ./ncu_set_full.ncu-rep --kernel-id :::28 --section=LaunchStats
 
 ![image-20260122173641100](./ncu.assets/ncu_launch_statistics.png)
 
-**尾效问题（Tail Effect）：** todo
+**[尾部效应 ](https://developer.nvidia.com/blog/cuda-pro-tip-minimize-the-tail-effect/)（Tail Effect）：** 每 wave 包含最多 `#SMs × max_blocks_per_SM` 个 blocks；当总 block 数不能被 `#SMs` 整除时，**最后一个 wave 无法填满所有 SM**，导致部分 SM 空闲等待，形成“尾部延迟”。
 
+```shell
+Theoretical Active Warps/SM: 64
+Threads/SM = 64 × 32 = 2,048 线程
+Blocks/SM = 2,048 / 256 = 8 blocks/SM
+Wave Size = SMs × Blocks/SM = 108 × 8 = 864 blocks/wave
+Total Waves = 4,096 / 864 = 4.74 waves = 4 full waves (3,456 blocks) + 0.74 partial wave (640 blocks)
 ```
-Waves Per SM: 4.74
-Full waves: 4
-Partial wave: 640 blocks (占 20% 潜在开销)
-```
 
-**问题分析：**当前 SM 数: 108; Grid: 4,096 / 108 = 37.9 blocks/SM; 4 个完整 wave = 4 × 32 = 128 blocks; 第 5 个 wave 只有 37.9 - 32 = 5.9 个 blocks; 部分 wave 可能造成 20% 性能损失
+优化：
 
-**解决方案：**
-
-```bash
-# 调整 grid size 使 block 数整除 SM 数
-# 建议 grid: 108 × 32 = 3,456 (4 waves) 或 108 × 64 = 6,912 (8 waves)
-```
+* 优先增加线程块数量，使 grid 是 SM 的倍数来削弱影响
+* [`__launch_bounds__`](http://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#launch-bounds) 限制寄存器数量
 
 #### Occupancy（占用率分析）
 
@@ -722,6 +805,15 @@ ncu --import ./ncu_set_full.ncu-rep --kernel-id :::28 --section=Occupancy
 
 ![image-20260122173556155](./ncu.assets/ncu_occupancy.png)
 
+| 指标                             | 值          | 含义                         |
+| -------------------------------- | ----------- | ---------------------------- |
+| **Registers per Thread**         | 30          | 每线程寄存器用量             |
+| **Block Limit: Registers**       | 8 blocks/SM | 寄存器限制最大 block 数      |
+| **Block Limit: SM / Shared Mem** | 32          | SM 资源和 shared memory 充裕 |
+| **Theoretical Occupancy**        | 100%        | 理论可达满载                 |
+| **Achieved Occupancy**           | **93.19%**  | 实际占用率极高               |
+| **Active Warps per SM**          | 59.64       | 接近理论最大值（64）         |
+
 #### GPU and Memory Workload Distribution
 
 ```shell
@@ -729,6 +821,7 @@ ncu --import ./ncu_set_full.ncu-rep --kernel-id :::28 --section=WorkloadDistribu
 ```
 
 ![image-20260122175304500](./ncu.assets/ncu_gpu_and_momory_workload_distribution.png)
+
 
 #### Source Counters（源代码级分析）
 
@@ -738,7 +831,14 @@ ncu --import ./ncu_set_full.ncu-rep --kernel-id :::28 --section=SourceCounters
 
 ![image-20260122175332101](./ncu.assets/ncu_source_counters.png)
 
-将性能指标关联到具体的源代码行，定位热点代码。
+将性能指标关联到具体的源代码行，定位热点代码，可跳转到source 页面。
+
+| 指标                          | 值        | 含义                                          |
+| ----------------------------- | --------- | --------------------------------------------- |
+| **Branch Instructions Ratio** | 0.03%     | 分支指令占比极低                              |
+| **Branch Instructions**       | 4,325,376 | 总分支指令数                                  |
+| **Branch Efficiency**         | 100%      | 所有分支在 warp 内完全一致，无 divergent 执行 |
+| **Avg. Divergent Branches**   | 0         | 无任何 warp 出现分支分歧                      |
 
 ### source page
 
@@ -747,12 +847,18 @@ ncu --import ./ncu_import_source.ncu-rep --kernel-id :::28 --page=source
 ncu --import ./ncu_import_source.ncu-rep --kernel-id :::28 --page=source --print-source=cuda,sass
 ```
 
-![image-20260122173835728](./ncu.assets/ncu_source.png)
+![image-20260124102002765](./ncu.assets/ncu_source.png)
 
 source 页面展示：
-- 源代码与 SASS 汇编的对应关系
-- 每行代码的指令数、周期数
-- 内存访问模式
+| 选项 | 含义 |
+| ---- | ---- |
+| Live Registers | 活跃寄存器数：查 register pressure |
+| Instruction Mix | 指令类型：算/存比例 |
+| Attributed Stalls | stall 来源：查卡在哪 |
+| Scoreboard Dependencies | 数据依赖：当前指令必须等前一条指令的结果，指令在等谁 |
+| Instruction & Scoreboards | 指令级 stall 分解 |
+| Inline Functions | inline 展开/寄存器影响 |
+| Statistics | 汇总级统计 |
 
 ### Context
 
@@ -766,7 +872,7 @@ source 页面展示：
 ncu --import ncu_set_full.ncu-rep --page=raw
 ```
 
-![image-20260122195241256](./ncu.assets/ncu_raw)
+![image-20260122195241256](./ncu.assets/ncu_raw.png)
 
 ### session
 

@@ -19,11 +19,11 @@
  *   help       - 显示帮助信息
  */
 #include <cuda_runtime.h>
+#include <nvtx3/nvtx3.hpp>
 #include <nvtx3/nvToolsExt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <cmath>
 
 #define CUDA_CHECK(error)                                   \
 {                                                           \
@@ -40,14 +40,9 @@
 #define N (1024 * 1024)
 #define BLOCK_SIZE 256
 
-// ============================================================================
-// 全局变量（用于mark测试）
-// ============================================================================
 static float *g_d_b = nullptr;
 
-// ============================================================================
-// 辅助函数：打印帮助信息
-// ============================================================================
+/* ---------------- help ---------------- */
 void print_help(const char* program_name) {
     printf("Usage: %s [options]\n\n", program_name);
     printf("Options:\n");
@@ -55,27 +50,20 @@ void print_help(const char* program_name) {
     printf("  --iter <N>        迭代次数 (默认: 5)\n");
     printf("  --help, -h        显示帮助信息\n\n");
     printf("Available modes:\n");
-    printf("  basic     - 基础标记(nvtxMark)和范围(nvtxRange)\n");
-    printf("  domain    - 自定义域测试(nvtxDomainCreate/Mark/Range)\n");
-    printf("  nested    - 嵌套范围测试(deeply nested ranges)\n");
-    printf("  mark      - 标记点详细测试\n");
+    printf("  basic     - 基础标记(nvtxMark / nvtxRange)\n");
+    printf("  domain    - 自定义域测试(nvtxDomain*)\n");
+    printf("  nested    - 嵌套范围测试\n");
+    printf("  mark      - 标记点测试\n");
     printf("  func-auto - 函数级自动范围(NVTX3_FUNC_RANGE)\n");
     printf("  all       - 所有功能测试\n\n");
-    printf("Examples:\n");
-    printf("  %s --mode=basic --iter=3\n", program_name);
-    printf("  %s --mode=domain\n", program_name);
-    printf("  %s --mode=all\n", program_name);
 }
 
-// ============================================================================
-// CUDA Kernel: 简单的向量计算
-// ============================================================================
+/* ---------------- kernels ---------------- */
 __global__ void vector_add(float* out, const float* a, const float* b, int n) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < n) {
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 10; i++)
             out[idx] = a[idx] + b[idx] * 0.01f;
-        }
     }
 }
 
@@ -161,74 +149,55 @@ void test_basic(float *d_data, int iterations) {
 // ============================================================================
 // 自定义域测试 (C API)
 // ============================================================================
+/* ---------------- domain test ---------------- */
 void test_domain(float *d_data, int iterations) {
-    // 创建自定义域
     nvtxDomainHandle_t domainA = nvtxDomainCreateA("Domain A");
-    nvtxDomainHandle_t domainB = nvtxDomainCreateA("Domain B");
 
-    nvtxDomainMarkA(domainA, "test_domain: start");
+    nvtxEventAttributes_t attr = {};
+    attr.version = NVTX_VERSION;
+    attr.size    = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+    attr.messageType = NVTX_MESSAGE_TYPE_ASCII;
+
+    attr.message.ascii = "test_domain: start";
+    nvtxDomainMarkEx(domainA, &attr);
 
     for (int iter = 0; iter < iterations; iter++) {
-        // 域内范围开始
-        nvtxRangeHandle_t rangeA = nvtxDomainRangeStartA(domainA, "Domain A@Iteration");
+
+        attr.message.ascii = "Domain A@Iteration";
+        nvtxDomainRangePushEx(domainA, &attr);
 
         float *d_a, *d_b, *d_out;
         CUDA_CHECK(cudaMalloc(&d_a, N * sizeof(float)));
         CUDA_CHECK(cudaMalloc(&d_b, N * sizeof(float)));
         CUDA_CHECK(cudaMalloc(&d_out, N * sizeof(float)));
 
-        nvtxDomainMarkA(domainA, "Domain A: memory allocated");
-
-        nvtxRangeHandle_t sub_range = nvtxDomainRangeStartA(domainA, "Domain A@Kernel");
+        attr.message.ascii = "Domain A@Kernel";
+        nvtxDomainRangePushEx(domainA, &attr);
 
         CUDA_CHECK(cudaMemset(d_a, 1, N * sizeof(float)));
         CUDA_CHECK(cudaMemset(d_b, 2, N * sizeof(float)));
-        CUDA_CHECK(cudaMemset(d_out, 0, N * sizeof(float)));
 
         int blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
         vector_add<<<blocks, BLOCK_SIZE>>>(d_out, d_a, d_b, N);
         CUDA_CHECK(cudaDeviceSynchronize());
 
-        nvtxDomainMarkA(domainA, "Domain A: kernel completed");
-        nvtxRangePop();  // 结束 sub_range
+        nvtxDomainRangePop(domainA);  // Kernel
 
-        nvtxDomainMarkA(domainA, "Domain A: memcpy D2H");
-        CUDA_CHECK(cudaMemcpy(d_data, d_out, N * sizeof(float), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(d_data, d_out,
+                               N * sizeof(float),
+                               cudaMemcpyDeviceToHost));
 
-        nvtxRangePop();  // 结束 rangeA
+        nvtxDomainRangePop(domainA);  // Iteration
 
         CUDA_CHECK(cudaFree(d_a));
         CUDA_CHECK(cudaFree(d_b));
         CUDA_CHECK(cudaFree(d_out));
     }
 
-    // 使用另一个域
-    {
-        nvtxRangeHandle_t rangeB = nvtxDomainRangeStartA(domainB, "Domain B@Compute");
+    attr.message.ascii = "test_domain: end";
+    nvtxDomainMarkEx(domainA, &attr);
 
-        float *d_a, *d_out;
-        CUDA_CHECK(cudaMalloc(&d_a, N * sizeof(float)));
-        CUDA_CHECK(cudaMalloc(&d_out, N * sizeof(float)));
-
-        CUDA_CHECK(cudaMemset(d_a, 5, N * sizeof(float)));
-
-        int blocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
-        vector_scale<<<blocks, BLOCK_SIZE>>>(d_out, d_a, 2.0f, N);
-        CUDA_CHECK(cudaDeviceSynchronize());
-
-        nvtxDomainMarkA(domainB, "Domain B: scale completed");
-
-        nvtxRangePop();
-
-        CUDA_CHECK(cudaFree(d_a));
-        CUDA_CHECK(cudaFree(d_out));
-    }
-
-    nvtxDomainMarkA(domainA, "test_domain: end");
-
-    // 销毁域
     nvtxDomainDestroy(domainA);
-    nvtxDomainDestroy(domainB);
 }
 
 // ============================================================================

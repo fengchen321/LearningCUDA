@@ -176,13 +176,13 @@ nsys常用快捷按键：
 >
 > 鼠标悬浮看具体的信息，比如Threads里黑色：CPU核心利用率，黄色：采样点；绿色：线程状态（运行+等待）
 
-Analysis Summar 展示的是分析概要，包含指令配置，CPU，GPU， NIC网格信息,环境变量等信息。
+Analysis Summary 展示的是分析概要，包含指令配置，CPU，GPU， NIC网格信息,环境变量等信息。
 
 常用Timeline View：可视化所有事件的时间序列。右上角+-可放大缩小。缩小后高度表示百分比利用率
 
 Events VIew： 以表格形式列出所有采集到的原始事件，支持排序。
 
-Stats System View:：按类别汇总的性能计数器和统计信息
+Stats System View：按类别汇总的性能计数器和统计信息
 
 - **典型子表**：
   - **CUDA API Statistics**：各 API 调用次数、总耗时
@@ -208,6 +208,40 @@ Flat View：所有函数的去重列表，不显示调用关系
 点击其中一项比如3位置的kernel，双击显示4中的箭头对应着API和设备kernel事件的联系。鼠标悬浮可以看到API的描述的trace信息。在5中Events VIew中信息一致,kernel 也同样可以看到附加的设备端信息。
 
 点击kernel鼠标右键可以查看ncu指令，运行相关指令去分析kernel，也可以右键copy ToolTip 拷贝trace信息。
+
+### nvtx
+
+```shell
+# 基础 NVTX 采集 + 统计
+nsys profile --stats=true --trace=nvtx,cuda -o nsys_profile_nvtx_basic ./profile_demo/nvtx_demo --mode=all
+```
+
+![image-20260124152011247](./nsys.assets/nsys_profile_nvtx_stats.png)
+
+![image-20260124145221372](./nsys.assets/nsys_profile_nvtx_stats_view.png)
+
+```shell
+-c nvtx # todo 测不出来该指令效果
+
+# 只捕获特定域（Domain A）
+nsys profile --trace=nvtx --nvtx-domain-include="Domain A" \
+      -o nsys_profile_nvtx_domain_include ./profile_demo/nvtx_demo --mode=domain
+
+# 排除特定域（Domain A）
+nsys profile --trace=nvtx --nvtx-domain-exclude="Domain A" \
+      -o nsys_profile_nvtx_domain_exclude ./profile_demo/nvtx_demo --mode=domain
+
+# 捕获指定范围（range@domain 格式）
+nsys profile -p "Domain A@Iteration" --trace=nvtx \
+      -o nsys_profile_nvtx_capture_specific ./profile_demo/nvtx_demo --mode=domain
+
+# NVTX 嵌套范围分析
+nsys profile --trace=nvtx --stats=true -o nsys_profile_nvtx_nested \
+      ./profile_demo/nvtx_demo --mode=nested
+
+# 使用 stats 命令过滤 NVTX
+nsys stats --force-export=true --report=nvtx_sum --filter-nvtx="Region A: Vector Add" nsys_profile_nvtx_basic.nsys-rep
+```
 
 ==**后续launch-service间的option command里，和profile相同的子命令不在显示赘述。**==
 
@@ -322,7 +356,7 @@ nsys stats --force-export=true --report=cuda_gpu_kern_sum ./nsys_profile_status_
 # 导出多种报告，多种格式，三种report，对应format格式三种，现在提供两种格式输出，匹配方法重复最后一种格式用于对齐
 nsys stats --force-export=true --report=cuda_gpu_trace --report=cuda_gpu_kern_sum --report=cuda_api_sum --format=csv,column --output=.,- ./nsys_profile_status_true.nsys-rep
 # 过滤显示
-nsys stats --report cuda_api_sum --format table \
+nsys stats --report=cuda_api_sum --format table \
 --output @"grep -E (-|Name|cudaFree)" ./nsys_profile_status_true.sqlite
 ```
 
@@ -342,7 +376,7 @@ nsys stats --report cuda_api_sum --format table \
 ```shell
 nsys status --environment
 ```
-![image-20260119180327014](./nsys.assets/nsys_status.png)
+![image-20260124143546082](./nsys.assets/nsys_status.png)
 
 ## export
 
